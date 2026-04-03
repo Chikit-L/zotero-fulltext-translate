@@ -1,0 +1,105 @@
+<linkset>
+  <html:link rel="localization" href="__addonRef__-preferences.ftl" />
+</linkset>
+<groupbox
+  onload="Zotero.__addonInstance__.hooks.onPrefsEvent('load', { window })"
+>
+  <description style="white-space: normal; line-height: 1.6; margin: 0 0 8px 0;">
+    <html:span data-l10n-id="pref-mineru-token-help-prefix"></html:span>
+    <html:span data-l10n-id="pref-mineru-token-help-suffix"></html:span>
+  </description>
+  <hbox>
+    <html:button
+      type="button"
+      id="zotero-prefpane-__addonRef__-openMineruApi"
+      data-l10n-id="pref-mineru-open-api"
+    ></html:button>
+  </hbox>
+  <hbox>
+    <html:label
+      for="zotero-prefpane-__addonRef__-mineruToken"
+      data-l10n-id="pref-mineru-token"
+    ></html:label>
+    <html:input
+      type="text"
+      id="zotero-prefpane-__addonRef__-mineruToken"
+    ></html:input>
+  </hbox>
+
+  <hbox align="center">
+    <html:label
+      for="zotero-prefpane-__addonRef__-mineruModelVersion"
+      data-l10n-id="pref-mineru-model"
+    ></html:label>
+    <html:select id="zotero-prefpane-__addonRef__-mineruModelVersion">
+      <html:option value="vlm">vlm</html:option>
+      <html:option value="pipeline">pipeline</html:option>
+    </html:select>
+    <image
+      class="help-icon"
+      src="chrome://__addonRef__/content/icons/help.svg"
+      data-l10n-id="pref-mineru-model-tooltip"
+      style="margin-top: 5px; margin-bottom: 5px; width: 20px; margin-left: 6px;"
+    ></image>
+  </hbox>
+
+  <hbox>
+    <html:label
+      for="zotero-prefpane-__addonRef__-mineruLanguage"
+      data-l10n-id="pref-mineru-language"
+    ></html:label>
+    <html:select id="zotero-prefpane-__addonRef__-mineruLanguage">
+      <html:option value="en">en - 纯英文</html:option>
+      <html:option value="ch">ch - 中英文</html:option>
+      <html:option value="ch_server">ch_server - 繁体、手写体</html:option>
+      <html:option value="japan">japan - 日文为主</html:option>
+      <html:option value="korean">korean - 韩文</html:option>
+      <html:option value="chinese_cht">chinese_cht - 繁体中文为主</html:option>
+      <html:option value="ta">ta - 泰米尔文</html:option>
+      <html:option value="te">te - 泰卢固文</html:option>
+      <html:option value="ka">ka - 卡纳达文</html:option>
+      <html:option value="el">el - 希腊文</html:option>
+      <html:option value="th">th - 泰文</html:option>
+    </html:select>
+  </hbox>
+
+  <checkbox
+    id="zotero-prefpane-__addonRef__-mineruEnableOCR"
+    data-l10n-id="pref-mineru-enable-ocr"
+  />
+  <checkbox
+    id="zotero-prefpane-__addonRef__-mineruEnableTable"
+    data-l10n-id="pref-mineru-enable-table"
+  />
+  <checkbox
+    id="zotero-prefpane-__addonRef__-mineruEnableFormula"
+    data-l10n-id="pref-mineru-enable-formula"
+  />
+
+  <hbox>
+    <html:button
+      type="button"
+      id="zotero-prefpane-__addonRef__-savePrefs"
+      data-l10n-id="pref-save-button"
+    ></html:button>
+    <html:button
+      type="button"
+      id="zotero-prefpane-__addonRef__-stopAllTranslations"
+      data-l10n-id="pref-stop-all-button"
+      style="margin-left: 8px;"
+    ></html:button>
+  </hbox>
+
+  <separator class="thin" />
+
+  <description>
+    <html:p data-l10n-id="pref-translation-adapter-help"></html:p>
+    <html:p data-l10n-id="pref-translation-service-help"></html:p>
+  </description>
+</groupbox>
+<vbox>
+  <html:label
+    data-l10n-id="pref-help"
+    data-l10n-args='{"time": "__buildTime__","name": "__addonName__","version":"__buildVersion__"}'
+  ></html:label>
+</vbox>

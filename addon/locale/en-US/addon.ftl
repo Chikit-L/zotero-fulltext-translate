@@ -1,0 +1,13 @@
+startup-begin = Full Text Translate is loading
+startup-finish = Full Text Translate is ready
+menuitem-translate-fulltext = Full Text Translation
+prefs-title = Full Text Translation
+progress-start = Starting
+progress-mineru = Parsing PDF with MinerU
+progress-translate = Translating markdown
+progress-output = Generating HTML output
+progress-done = Translation complete
+error-no-regular-item = Please select a regular item first
+error-no-pdf = The selected item does not have a usable PDF attachment
+error-pdf-not-local = The PDF attachment is not available locally
+error-unknown = Unknown error

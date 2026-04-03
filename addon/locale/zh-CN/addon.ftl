@@ -1,0 +1,13 @@
+startup-begin = 全文翻译插件加载中
+startup-finish = 全文翻译插件已就绪
+menuitem-translate-fulltext = 全文翻译
+prefs-title = 全文翻译
+progress-start = 开始处理
+progress-mineru = 正在调用 MinerU 解析 PDF
+progress-translate = 正在翻译 Markdown
+progress-output = 正在生成 HTML 输出
+progress-done = 全文翻译完成
+error-no-regular-item = 请先选择文献条目
+error-no-pdf = 所选条目没有可用的 PDF 附件
+error-pdf-not-local = PDF 附件不在本地，无法上传给 MinerU
+error-unknown = 发生未知错误

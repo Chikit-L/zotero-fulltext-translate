@@ -1,12 +1,14 @@
 import type { MineruStructuredBlock } from "./MineruClient";
 import {
-  extractProtectedMathSegments,
+  prepareMathForTranslation,
   restoreProtectedMathSegments,
 } from "./MathProcessor";
 import { TranslationControl } from "./TranslationControl";
 
 type TranslationResult = {
   translatedMarkdown: string;
+  sourceBlocks: string[];
+  translatedBlocks: string[];
   provider: string;
 };
 
@@ -74,7 +76,21 @@ export class TranslationAdapter {
       if (block.isReferenceHeading) {
         skipRemainingTranslation = true;
       }
-      if (skipRemainingTranslation || !block.translatable) {
+      if (skipRemainingTranslation) {
+        translatedBlocks[index] = block.raw;
+        continue;
+      }
+      if (this.isHTMLTableBlock(block.raw)) {
+        translatedBlocks[index] = await this.translateTableHTML(
+          pdfTranslate,
+          block.raw,
+          itemID,
+          () => ({ current: index + 1, total: blocks.length }),
+          onProgress,
+        );
+        continue;
+      }
+      if (!block.translatable) {
         translatedBlocks[index] = block.raw;
         continue;
       }
@@ -92,6 +108,8 @@ export class TranslationAdapter {
 
     return {
       translatedMarkdown: translatedBlocks.join("\n\n"),
+      sourceBlocks: blocks.map((block) => block.raw),
+      translatedBlocks,
       provider: "PDFTranslate.current",
     };
   }
@@ -290,7 +308,7 @@ export class TranslationAdapter {
     total = 1,
     onProgress?: (progress: TranslationProgress) => void,
   ) {
-    const protectedMath = extractProtectedMathSegments(chunk);
+    const protectedMath = prepareMathForTranslation(chunk);
     const sourceText = protectedMath.text;
     let lastError = "Unknown translation error";
     for (let attempt = 1; attempt <= 5; attempt++) {
@@ -500,11 +518,14 @@ export class TranslationAdapter {
   }
 
   private static splitBlocks(markdown: string): MarkdownBlock[] {
-    const blocks = markdown
+    const blocks = this.mergeBrokenMarkdownBlocks(
+      markdown
       .replace(/\r\n/g, "\n")
+      .replace(/(^\s*!\[[^\]]*\]\([^)]+\)\s*$)\n(?!\s*\n)/gm, "$1\n\n")
       .split(/\n\s*\n/)
       .map((block) => block.trim())
-      .filter(Boolean);
+      .filter(Boolean),
+    );
 
     return (blocks.length ? blocks : [markdown]).map((raw) => ({
       raw,
@@ -513,8 +534,71 @@ export class TranslationAdapter {
         !/^\s*[-:| ]+\s*$/m.test(raw) &&
         !raw.includes("<table") &&
         !raw.includes("</table>") &&
-        !/^\s*```/.test(raw),
+        !/^\s*```/.test(raw) &&
+        !/^\s*(?:\$\$[\s\S]*\$\$|\\\[[\s\S]*\\\])\s*$/.test(raw),
       isReferenceHeading: this.isReferenceSection(raw),
     }));
+  }
+
+  private static isHTMLTableBlock(block: string) {
+    return block.includes("<table") && block.includes("</table>");
+  }
+
+  private static mergeBrokenMarkdownBlocks(blocks: string[]) {
+    const merged: string[] = [];
+    for (const block of blocks) {
+      const trimmed = block.trim();
+      if (!trimmed) {
+        continue;
+      }
+      const targetIndex = this.findPreviousMarkdownMergeTargetIndex(merged, trimmed);
+      if (targetIndex >= 0) {
+        merged[targetIndex] = this.joinParagraphText(merged[targetIndex], trimmed);
+        continue;
+      }
+      merged.push(trimmed);
+    }
+    return merged;
+  }
+
+  private static findPreviousMarkdownMergeTargetIndex(merged: string[], currentBlock: string) {
+    if (!this.shouldMergeMarkdownIntoPrevious(currentBlock)) {
+      return -1;
+    }
+    for (let index = merged.length - 1; index >= 0; index--) {
+      const candidate = merged[index];
+      if (this.isNonParagraphMarkdownBlock(candidate)) {
+        return -1;
+      }
+      if (this.endsLikeCompleteParagraph(candidate)) {
+        return -1;
+      }
+      return index;
+    }
+    return -1;
+  }
+
+  private static shouldMergeMarkdownIntoPrevious(block: string) {
+    const firstLine = block.split("\n").find((line) => line.trim())?.trim() || "";
+    if (!firstLine) {
+      return false;
+    }
+    if (this.isNonParagraphMarkdownBlock(block)) {
+      return false;
+    }
+    return !/^[A-Z]/.test(firstLine);
+  }
+
+  private static isNonParagraphMarkdownBlock(block: string) {
+    const trimmed = block.trim();
+    return (
+      /^\s*!\[[^\]]*\]\([^)]+\)\s*$/m.test(trimmed) ||
+      /^\s*#{1,6}\s+/.test(trimmed) ||
+      /^\s*```/.test(trimmed) ||
+      /^\s*\|.*\|\s*$/m.test(trimmed) ||
+      /^\s*[-:| ]+\s*$/m.test(trimmed) ||
+      trimmed.includes("<table") ||
+      trimmed.includes("</table>")
+    );
   }
 }

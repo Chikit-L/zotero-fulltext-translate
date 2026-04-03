@@ -83,74 +83,42 @@ export class TranslationWorkflow {
       this.updateStatusLine(
         progress,
         55,
-        parseResult.blocks
-          ? "MinerU 解析完成，准备按结构翻译正文"
-          : "MinerU 解析完成，准备翻译正文",
+        "MinerU 解析完成，准备按 Markdown 逐段翻译正文",
         isLightweightMode,
       );
 
-      let resultAttachment: Zotero.Item;
-      if (parseResult.blocks?.length) {
-        TranslationControl.throwIfStopped();
-        const translation = await TranslationAdapter.translateStructuredBlocks(
-          parseResult.blocks,
-          parseResult.markdown,
-          item.id,
-          (translationProgress) => {
-            const total = Math.max(translationProgress.total, 1);
-            const current = Math.min(translationProgress.current, total);
-            const base = 55;
-            const span = 30;
-            const computed =
-              translationProgress.stage === "done"
-                ? base + span
-                : base + Math.floor((current / total) * span);
-            let text = `正在翻译正文块 ${current}/${total}`;
-            if (translationProgress.stage === "retrying") {
-              text += `，重试第 ${translationProgress.retries} 次`;
-            }
-            this.updateStatusLine(progress, computed, text, isLightweightMode);
-          },
-        );
+      TranslationControl.throwIfStopped();
+      const translation = await TranslationAdapter.translateMarkdown(
+        parseResult.markdown,
+        item.id,
+        (translationProgress) => {
+          const total = Math.max(translationProgress.total, 1);
+          const current = Math.min(translationProgress.current, total);
+          const base = 55;
+          const span = 30;
+          const computed =
+            translationProgress.stage === "done"
+              ? base + span
+              : base + Math.floor((current / total) * span);
+          let text = `正在翻译正文 ${current}/${total}`;
+          if (translationProgress.stage === "retrying") {
+            text += `，重试第 ${translationProgress.retries} 次`;
+          }
+          this.updateStatusLine(progress, computed, text, isLightweightMode);
+        },
+      );
 
-        TranslationControl.throwIfStopped();
-        this.updateStatusLine(progress, 90, getString("progress-output"), isLightweightMode);
-        resultAttachment = await ResultWriter.attachStructuredHTMLResult(
-          item,
-          item.getDisplayTitle(),
-          translation.blocks,
-        );
-      } else {
-        TranslationControl.throwIfStopped();
-        const translation = await TranslationAdapter.translateMarkdown(
-          parseResult.markdown,
-          item.id,
-          (translationProgress) => {
-            const total = Math.max(translationProgress.total, 1);
-            const current = Math.min(translationProgress.current, total);
-            const base = 55;
-            const span = 30;
-            const computed =
-              translationProgress.stage === "done"
-                ? base + span
-                : base + Math.floor((current / total) * span);
-            let text = `正在翻译正文 ${current}/${total}`;
-            if (translationProgress.stage === "retrying") {
-              text += `，重试第 ${translationProgress.retries} 次`;
-            }
-            this.updateStatusLine(progress, computed, text, isLightweightMode);
-          },
-        );
-
-        TranslationControl.throwIfStopped();
-        this.updateStatusLine(progress, 90, getString("progress-output"), isLightweightMode);
-        resultAttachment = await ResultWriter.attachHTMLResult(
-          item,
-          item.getDisplayTitle(),
-          parseResult.markdown,
-          translation.translatedMarkdown,
-        );
-      }
+      TranslationControl.throwIfStopped();
+      this.updateStatusLine(progress, 90, getString("progress-output"), isLightweightMode);
+      const resultAttachment = await ResultWriter.attachHTMLResult(
+        item,
+        item.getDisplayTitle(),
+        parseResult.markdown,
+        translation.translatedMarkdown,
+        translation.sourceBlocks,
+        translation.translatedBlocks,
+        parseResult.markdownImageMap,
+      );
 
       this.updateStatusLine(
         progress,

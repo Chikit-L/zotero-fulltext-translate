@@ -7,11 +7,6 @@ export default defineConfig({
   name: pkg.config.addonName,
   id: pkg.config.addonID,
   namespace: pkg.config.addonRef,
-  updateURL: `https://{{owner}}.github.io/{{repo}}/${
-    pkg.version.includes("-") ? "update-beta.json" : "update.json"
-  }`,
-  xpiDownloadLink:
-    "https://github.com/{{owner}}/{{repo}}/releases/download/v{{version}}/{{xpiName}}.xpi",
 
   build: {
     assets: ["addon/**/*.*"],

@@ -8,8 +8,14 @@ export class ResultWriter {
     title: string,
     originalMarkdown: string,
     translatedMarkdown: string,
+    sourceBlocks?: string[],
+    translatedBlocks?: string[],
+    markdownImageMap?: Record<string, string>,
   ) {
-    const html = HTMLRenderer.render(title, originalMarkdown, translatedMarkdown);
+    const html =
+      sourceBlocks && translatedBlocks
+        ? HTMLRenderer.renderFromBlocks(title, sourceBlocks, translatedBlocks, markdownImageMap)
+        : HTMLRenderer.render(title, originalMarkdown, translatedMarkdown, markdownImageMap);
     return this.attachHTML(item, title, html);
   }
 
@@ -26,14 +32,14 @@ export class ResultWriter {
     TranslationControl.throwIfStopped();
     const tmpDir = Zotero.getTempDirectory().path;
     await Zotero.File.createDirectoryIfMissingAsync(tmpDir);
-    const safeName = title.replace(/[\\/:*?"<>|]/g, "_").slice(0, 80) || "translation";
+    const safeName = "Full Text Translation";
     const path = PathUtils.join(tmpDir, `${safeName}.translated.html`);
     await Zotero.File.putContentsAsync(path, html, "utf-8");
 
     const attachment = await Zotero.Attachments.importFromFile({
       file: path,
       parentItemID: item.id,
-      title: `${title} - Full Text Translation`,
+      title: "Full Text Translation",
       contentType: "text/html",
     });
 

@@ -21,6 +21,7 @@ export type MineruStructuredBlock =
 export type MineruParseResult = {
   markdown: string;
   blocks?: MineruStructuredBlock[];
+  markdownImageMap?: Record<string, string>;
 };
 
 type MineruCode = string | number;
@@ -254,10 +255,11 @@ export class MineruClient {
           is_ocr: Boolean(getPref("mineruEnableOCR")),
         },
       ],
-      model_version: getPref("mineruModelVersion") || "vlm",
       language: getPref("mineruLanguage") || "en",
       enable_table: Boolean(getPref("mineruEnableTable")),
       enable_formula: Boolean(getPref("mineruEnableFormula")),
+      enable_page_ocr: Boolean(getPref("mineruEnableOCR")),
+      layout_model: "doclayout_yolo",
     };
   }
 
@@ -440,9 +442,11 @@ export class MineruClient {
         throw new Error("MinerU 解析结果不完整：返回的压缩包中缺少 full.md。");
       }
 
-      if (!contentListEntry) {
-        return { markdown };
-      }
+        const markdownImageMap = await this.buildMarkdownImageMap(reader, markdown);
+
+        if (!contentListEntry) {
+          return { markdown, markdownImageMap };
+        }
 
       try {
         const rawContent = JSON.parse(
@@ -458,10 +462,11 @@ export class MineruClient {
         return {
           markdown,
           blocks: blocks.length ? blocks : undefined,
+          markdownImageMap,
         };
       } catch (error) {
         ztoolkit.log("Structured MinerU parse failed, fallback to full.md", error);
-        return { markdown };
+        return { markdown, markdownImageMap };
       }
     } finally {
       reader.close();
@@ -595,6 +600,28 @@ export class MineruClient {
             ? "image/webp"
             : "image/png";
     return `data:${mime};base64,${btoa(binary)}`;
+  }
+
+  private static async buildMarkdownImageMap(
+    reader: nsIZipReader,
+    markdown: string,
+  ): Promise<Record<string, string>> {
+    const refs = Array.from(
+      markdown.matchAll(/!\[[^\]]*\]\(([^)]+)\)/g),
+      (match) => String(match[1] || "").trim(),
+    ).filter(Boolean);
+    const uniqueRefs = [...new Set(refs)];
+    const imageMap: Record<string, string> = {};
+    for (const ref of uniqueRefs) {
+      if (/^(?:https?:|data:)/i.test(ref)) {
+        continue;
+      }
+      const dataUrl = await this.extractImageDataURL(reader, ref);
+      if (dataUrl) {
+        imageMap[ref] = dataUrl;
+      }
+    }
+    return imageMap;
   }
 
   private static resolveZipEntry(reader: nsIZipReader, entry: string): string | null {
@@ -799,6 +826,4 @@ export class MineruClient {
     return "";
   }
 }
-
-
 

@@ -6,6 +6,8 @@ import {
 } from "./MathProcessor";
 import type { TranslatedStructuredBlock } from "./TranslationAdapter";
 
+type MarkdownImageMap = Record<string, string>;
+
 function escapeHTML(input: string) {
   return input
     .replace(/&/g, "&amp;")
@@ -23,7 +25,12 @@ function inlineMarkdown(input: string) {
     .replace(/`([^`]+)`/g, "<code>$1</code>")
     .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
     .replace(/\*([^*]+)\*/g, "<em>$1</em>")
-    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>');
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>')
+    .replace(
+      /(?:\[(\d+(?:\s*[-,]\s*\d+)*)\]|【(\d+(?:\s*[-,]\s*\d+)*)】)/g,
+      (_, squareValue: string, cornerValue: string) =>
+        `<sup class="citation-ref">[${squareValue || cornerValue}]</sup>`,
+    );
 }
 
 function renderRichText(input: string) {
@@ -35,12 +42,109 @@ function renderRichText(input: string) {
   );
 }
 
+function renderMarkdownImage(
+  rawLine: string,
+  markdownImageMap?: MarkdownImageMap,
+) {
+  const match = rawLine.match(/^\s*!\[([^\]]*)\]\(([^)]+)\)\s*$/);
+  if (!match) {
+    return "";
+  }
+  const alt = match[1] || "";
+  const src = (markdownImageMap?.[match[2].trim()] || match[2].trim()).trim();
+  return `<p><img src="${escapeHTML(src)}" alt="${escapeHTML(alt)}" /></p>`;
+}
+
+function isDisplayFormulaBlock(markdown: string) {
+  const trimmed = markdown.trim();
+  return (
+    (/^\$\$[\s\S]*\$\$$/.test(trimmed) && trimmed.length > 4) ||
+    (/^\\\[[\s\S]*\\\]$/.test(trimmed) && trimmed.length > 4)
+  );
+}
+
 function splitBlocks(markdown: string) {
-  return markdown
+  return mergeBrokenMarkdownBlocks(
+    markdown
     .replace(/\r\n/g, "\n")
+    .replace(/(^\s*!\[[^\]]*\]\([^)]+\)\s*$)\n(?!\s*\n)/gm, "$1\n\n")
     .split(/\n\s*\n/)
     .map((block) => block.trim())
-    .filter(Boolean);
+    .filter(Boolean),
+  );
+}
+
+function mergeBrokenMarkdownBlocks(blocks: string[]) {
+  const merged: string[] = [];
+  for (const block of blocks) {
+    const trimmed = block.trim();
+    if (!trimmed) {
+      continue;
+    }
+    const targetIndex = findPreviousMarkdownMergeTargetIndex(merged, trimmed);
+    if (targetIndex >= 0) {
+      merged[targetIndex] = joinMarkdownParagraphText(merged[targetIndex], trimmed);
+      continue;
+    }
+    merged.push(trimmed);
+  }
+  return merged;
+}
+
+function findPreviousMarkdownMergeTargetIndex(merged: string[], currentBlock: string) {
+  if (!shouldMergeMarkdownIntoPrevious(currentBlock)) {
+    return -1;
+  }
+  for (let index = merged.length - 1; index >= 0; index--) {
+    const candidate = merged[index];
+    if (isNonParagraphMarkdownBlock(candidate)) {
+      return -1;
+    }
+    if (/[.!?。！？:：”"')\]]\s*$/.test(candidate.trim())) {
+      return -1;
+    }
+    return index;
+  }
+  return -1;
+}
+
+function shouldMergeMarkdownIntoPrevious(block: string) {
+  const firstLine = block.split("\n").find((line) => line.trim())?.trim() || "";
+  if (!firstLine) {
+    return false;
+  }
+  if (isNonParagraphMarkdownBlock(block)) {
+    return false;
+  }
+  return !/^[A-Z]/.test(firstLine);
+}
+
+function isNonParagraphMarkdownBlock(block: string) {
+  const trimmed = block.trim();
+  return (
+    /^\s*!\[[^\]]*\]\([^)]+\)\s*$/m.test(trimmed) ||
+    /^\s*#{1,6}\s+/.test(trimmed) ||
+    /^\s*```/.test(trimmed) ||
+    /^\s*\|.*\|\s*$/m.test(trimmed) ||
+    /^\s*[-:| ]+\s*$/m.test(trimmed) ||
+    trimmed.includes("<table") ||
+    trimmed.includes("</table>")
+  );
+}
+
+function joinMarkdownParagraphText(previous: string, current: string) {
+  const prev = previous.trimEnd();
+  const next = current.trimStart();
+  if (!prev) {
+    return next;
+  }
+  if (!next) {
+    return prev;
+  }
+  if (prev.endsWith("-")) {
+    return `${prev.slice(0, -1)}${next}`;
+  }
+  return `${prev} ${next}`;
 }
 
 function isImageBlock(block: string) {
@@ -76,6 +180,9 @@ function clampHeadingLevel(level?: number) {
 function cleanTranslatedText(text: string, originalText?: string) {
   let cleaned = prepareText(text).trim();
   cleaned = cleaned.replace(/^标题[:：]\s*.*?文本翻译[:：]\s*/u, "");
+  if (originalText && /^#{1,6}\s+/.test(originalText.trim())) {
+    cleaned = cleaned.replace(/^#{1,6}\s*/, "");
+  }
   if (originalText) {
     const escaped = prepareText(originalText).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     cleaned = cleaned.replace(new RegExp(`^${escaped}\\s*[:：-]?\\s*`, "u"), "");
@@ -83,7 +190,14 @@ function cleanTranslatedText(text: string, originalText?: string) {
   return cleaned.trim();
 }
 
-function markdownBlockToHTML(markdown: string, titleLevel = 2) {
+function markdownBlockToHTML(
+  markdown: string,
+  titleLevel = 2,
+  markdownImageMap?: MarkdownImageMap,
+) {
+  if (isDisplayFormulaBlock(markdown)) {
+    return `<div class="formula-block">${renderFormulaToMathML(markdown.trim(), escapeHTML)}</div>`;
+  }
   const lines = markdown.replace(/\r\n/g, "\n").split("\n");
   const html: string[] = [];
   let inCode = false;
@@ -122,6 +236,12 @@ function markdownBlockToHTML(markdown: string, titleLevel = 2) {
     if (heading) {
       closeList();
       html.push(`<h${titleLevel}>${renderRichText(heading[2])}</h${titleLevel}>`);
+      continue;
+    }
+    const imageHTML = renderMarkdownImage(rawLine, markdownImageMap);
+    if (imageHTML) {
+      closeList();
+      html.push(imageHTML);
       continue;
     }
     const list = line.match(/^[-*]\s+(.*)$/);
@@ -184,6 +304,11 @@ function baseStyles() {
     p, li {
       margin: 0 0 12px;
     }
+    .citation-ref {
+      font-size: 0.75em;
+      line-height: 0;
+      vertical-align: super;
+    }
     ul {
       margin: 0 0 12px 24px;
       padding: 0;
@@ -194,6 +319,10 @@ function baseStyles() {
       border: 1px solid #ddd;
       padding: 12px;
       margin: 0 0 12px;
+    }
+    .formula-block {
+      margin: 0 0 12px;
+      overflow-x: auto;
     }
     table {
       width: 100%;
@@ -330,32 +459,87 @@ function renderCaptionPair(originalText?: string, translatedText?: string) {
 }
 
 export class HTMLRenderer {
-  static render(title: string, sourceMarkdown: string, translatedMarkdown: string) {
-    const sourceBlocks = splitBlocks(sourceMarkdown);
-    const translatedBlocks = splitBlocks(translatedMarkdown);
+  static render(
+    title: string,
+    sourceMarkdown: string,
+    translatedMarkdown: string,
+    markdownImageMap?: MarkdownImageMap,
+  ) {
+    return this.renderBlocks(
+      title,
+      splitBlocks(sourceMarkdown),
+      splitBlocks(translatedMarkdown),
+      markdownImageMap,
+    );
+  }
+
+  static renderFromBlocks(
+    title: string,
+    sourceBlocks: string[],
+    translatedBlocks: string[],
+    markdownImageMap?: MarkdownImageMap,
+  ) {
+    return this.renderBlocks(title, sourceBlocks, translatedBlocks, markdownImageMap);
+  }
+
+  private static renderBlocks(
+    title: string,
+    sourceBlocks: string[],
+    translatedBlocks: string[],
+    markdownImageMap?: MarkdownImageMap,
+  ) {
     const sections: string[] = [];
     let imageIndex = 1;
 
     for (let index = 0; index < sourceBlocks.length; index++) {
       const sourceBlock = sourceBlocks[index];
       const translatedBlock = translatedBlocks[index] || "";
+      const sourceHeading = sourceBlock.match(/^#{1,6}\s+(.*)$/);
 
       if (isImageBlock(sourceBlock)) {
+        const sourceHTML = markdownBlockToHTML(sourceBlock, 2, markdownImageMap);
         sections.push(`
       <section class="single-block">
-        <span class="original-translated"><p>（图片${imageIndex}）</p></span>
-        <span class="translated"><p>（图片${imageIndex}）</p></span>
+        <span class="original-translated">${sourceHTML}</span>
+        <span class="translated">${sourceHTML}</span>
       </section>`);
         imageIndex += 1;
         continue;
       }
 
       if (isTableBlock(sourceBlock)) {
+        const sourceHTML = sourceBlock;
+        const targetHTML = translatedBlock || sourceBlock;
+        const sameTable = normalizeBlock(sourceBlock) === normalizeBlock(translatedBlock || sourceBlock);
+        sections.push(`
+      <section class="table-block">
+        <div class="original-translated">${sourceHTML}</div>
+        <div class="translated">${sameTable ? sourceHTML : targetHTML}</div>
+      </section>`);
         continue;
       }
 
-      const sourceHTML = markdownBlockToHTML(sourceBlock, 2);
-      const targetHTML = markdownBlockToHTML(translatedBlock || sourceBlock, 2);
+      if (sourceHeading) {
+        const headingLevel = clampHeadingLevel(sourceHeading[0].match(/^#+/)?.[0].length || 2);
+        const originalText = sourceHeading[1].trim();
+        const translatedText = cleanTranslatedText(translatedBlock, sourceBlock).replace(/^#+\s*/, "").trim() || originalText;
+        if (normalizeTitle(originalText) === normalizeTitle(title)) {
+          continue;
+        }
+        const targetHTML = `<h${headingLevel}>${renderRichText(translatedText)}</h${headingLevel}>`;
+        const sourceLead = normalizeTitle(originalText) !== normalizeTitle(translatedText)
+          ? `<div class="original-translated"><p class="source-heading-text">${renderRichText(originalText)}</p></div>`
+          : "";
+        sections.push(`
+      <section class="heading-block">
+        ${targetHTML}
+        ${sourceLead}
+      </section>`);
+        continue;
+      }
+
+      const sourceHTML = markdownBlockToHTML(sourceBlock, 2, markdownImageMap);
+      const targetHTML = markdownBlockToHTML(translatedBlock || sourceBlock, 2, markdownImageMap);
       const sameContent = normalizeBlock(sourceBlock) === normalizeBlock(translatedBlock || sourceBlock);
 
       if (sameContent) {
@@ -455,6 +639,3 @@ export class HTMLRenderer {
     return renderFrame(title, sections.join("\n"));
   }
 }
-
-
-

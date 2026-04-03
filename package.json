@@ -1,7 +1,7 @@
 {
   "name": "zotero-fulltext-translate",
   "type": "module",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Full-text PDF translation for Zotero via MinerU and Translate for Zotero",
   "config": {
     "addonName": "Full Text Translate",

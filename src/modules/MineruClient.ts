@@ -16,6 +16,10 @@ export type MineruStructuredBlock =
       type: "image";
       caption?: string;
       dataUrl?: string;
+    }
+  | {
+      type: "formula";
+      text: string;
     };
 
 export type MineruParseResult = {
@@ -531,6 +535,18 @@ export class MineruClient {
           caption: caption || undefined,
           dataUrl,
         });
+        continue;
+      }
+
+      if (/(?:formula|equation)/i.test(type)) {
+        const text = this.readFormulaText(rawBlock);
+        if (!text) {
+          continue;
+        }
+        blocks.push({
+          type: "formula",
+          text,
+        });
       }
     }
 
@@ -558,6 +574,51 @@ export class MineruClient {
       }
     }
     return "";
+  }
+
+  private static readFormulaText(rawBlock: Record<string, unknown>): string {
+    const candidates = [
+      rawBlock.latex,
+      rawBlock.formula,
+      rawBlock.formula_text,
+      rawBlock.text,
+      rawBlock.equation,
+      rawBlock.inline_formula,
+      rawBlock.interline_formula,
+    ];
+
+    for (const value of candidates) {
+      if (typeof value === "string" && value.trim()) {
+        return this.normalizeFormulaBlock(value);
+      }
+      if (Array.isArray(value)) {
+        const merged = value
+          .map((part) => String(part || "").trim())
+          .filter(Boolean)
+          .join(" ")
+          .trim();
+        if (merged) {
+          return this.normalizeFormulaBlock(merged);
+        }
+      }
+    }
+
+    return "";
+  }
+
+  private static normalizeFormulaBlock(text: string) {
+    const trimmed = text.replace(/\r\n/g, "\n").trim();
+    if (!trimmed) {
+      return "";
+    }
+    if (
+      (trimmed.startsWith("$$") && trimmed.endsWith("$$")) ||
+      (trimmed.startsWith("\\[") && trimmed.endsWith("\\]")) ||
+      (trimmed.startsWith("\\(") && trimmed.endsWith("\\)"))
+    ) {
+      return trimmed;
+    }
+    return `$$\n${trimmed}\n$$`;
   }
 
   private static async readTextEntry(reader: nsIZipReader, entry: string) {
@@ -826,4 +887,3 @@ export class MineruClient {
     return "";
   }
 }
-

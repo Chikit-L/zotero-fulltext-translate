@@ -83,7 +83,7 @@ export class TranslationWorkflow {
       this.updateStatusLine(
         progress,
         55,
-        "MinerU 解析完成，准备按 Markdown 逐段翻译正文",
+        "MinerU 解析完成，准备按 Markdown 保真链逐段翻译正文",
         isLightweightMode,
       );
 

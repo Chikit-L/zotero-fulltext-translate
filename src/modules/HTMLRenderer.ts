@@ -57,79 +57,124 @@ function renderMarkdownImage(
 
 function isDisplayFormulaBlock(markdown: string) {
   const trimmed = markdown.trim();
-  return (
-    (/^\$\$[\s\S]*\$\$$/.test(trimmed) && trimmed.length > 4) ||
-    (/^\\\[[\s\S]*\\\]$/.test(trimmed) && trimmed.length > 4)
-  );
+  return /^\$\$[\s\S]*\$\$$/.test(trimmed) && trimmed.length > 4;
 }
 
 function splitBlocks(markdown: string) {
-  return mergeBrokenMarkdownBlocks(
-    markdown
-    .replace(/\r\n/g, "\n")
-    .replace(/(^\s*!\[[^\]]*\]\([^)]+\)\s*$)\n(?!\s*\n)/gm, "$1\n\n")
-    .split(/\n\s*\n/)
-    .map((block) => block.trim())
-    .filter(Boolean),
-  );
-}
+  const normalized = markdown.replace(/\r\n/g, "\n");
+  const lines = normalized.split("\n");
+  const blocks: string[] = [];
+  let index = 0;
 
-function mergeBrokenMarkdownBlocks(blocks: string[]) {
-  const merged: string[] = [];
-  for (const block of blocks) {
-    const trimmed = block.trim();
+  const pushBlock = (buffer: string[]) => {
+    const block = buffer.join("\n").trim();
+    if (block) {
+      blocks.push(block);
+    }
+  };
+
+  while (index < lines.length) {
+    const line = lines[index];
+    const trimmed = line.trim();
     if (!trimmed) {
+      index += 1;
       continue;
     }
-    const targetIndex = findPreviousMarkdownMergeTargetIndex(merged, trimmed);
-    if (targetIndex >= 0) {
-      merged[targetIndex] = joinMarkdownParagraphText(merged[targetIndex], trimmed);
+
+    if (trimmed.startsWith("```")) {
+      const buffer = [line];
+      index += 1;
+      while (index < lines.length) {
+        buffer.push(lines[index]);
+        if (lines[index].trim().startsWith("```")) {
+          index += 1;
+          break;
+        }
+        index += 1;
+      }
+      pushBlock(buffer);
       continue;
     }
-    merged.push(trimmed);
-  }
-  return merged;
-}
 
-function findPreviousMarkdownMergeTargetIndex(merged: string[], currentBlock: string) {
-  if (!shouldMergeMarkdownIntoPrevious(currentBlock)) {
-    return -1;
-  }
-  for (let index = merged.length - 1; index >= 0; index--) {
-    const candidate = merged[index];
-    if (isNonParagraphMarkdownBlock(candidate)) {
-      return -1;
+    if (trimmed === "$$") {
+      const buffer = [line];
+      index += 1;
+      while (index < lines.length) {
+        buffer.push(lines[index]);
+        if (lines[index].trim() === "$$") {
+          index += 1;
+          break;
+        }
+        index += 1;
+      }
+      pushBlock(buffer);
+      continue;
     }
-    if (/[.!?。！？:：”"')\]]\s*$/.test(candidate.trim())) {
-      return -1;
+
+    if (trimmed.startsWith("<table")) {
+      const buffer = [line];
+      if (line.includes("</table>")) {
+        pushBlock(buffer);
+        index += 1;
+        continue;
+      }
+      index += 1;
+      while (index < lines.length) {
+        buffer.push(lines[index]);
+        if (lines[index].includes("</table>")) {
+          index += 1;
+          break;
+        }
+        index += 1;
+      }
+      pushBlock(buffer);
+      continue;
     }
-    return index;
+
+    if (/^\s*!\[[^\]]*\]\([^)]+\)\s*$/.test(trimmed) || /^\s*#{1,6}\s+/.test(trimmed)) {
+      pushBlock([line]);
+      index += 1;
+      continue;
+    }
+
+    if (isMarkdownTableRow(trimmed)) {
+      const buffer = [line];
+      index += 1;
+      while (index < lines.length && isMarkdownTableRow(lines[index].trim())) {
+        buffer.push(lines[index]);
+        index += 1;
+      }
+      pushBlock(buffer);
+      continue;
+    }
+
+    const buffer = [line];
+    index += 1;
+    while (index < lines.length) {
+      const nextTrimmed = lines[index].trim();
+      if (
+        !nextTrimmed ||
+        nextTrimmed.startsWith("```") ||
+        nextTrimmed === "$$" ||
+        nextTrimmed === "\\[" ||
+        nextTrimmed.startsWith("<table") ||
+        /^\s*!\[[^\]]*\]\([^)]+\)\s*$/.test(nextTrimmed) ||
+        /^\s*#{1,6}\s+/.test(nextTrimmed) ||
+        isMarkdownTableRow(nextTrimmed)
+      ) {
+        break;
+      }
+      buffer.push(lines[index]);
+      index += 1;
+    }
+    pushBlock(buffer);
   }
-  return -1;
+
+  return blocks;
 }
 
-function shouldMergeMarkdownIntoPrevious(block: string) {
-  const firstLine = block.split("\n").find((line) => line.trim())?.trim() || "";
-  if (!firstLine) {
-    return false;
-  }
-  if (isNonParagraphMarkdownBlock(block)) {
-    return false;
-  }
-  return !/^[A-Z]/.test(firstLine);
-}
-
-function isNonParagraphMarkdownBlock(block: string) {
-  const trimmed = block.trim();
-  return (
-    /^\s*!\[[^\]]*\]\([^)]+\)\s*$/m.test(trimmed) ||
-    /^\s*#{1,6}\s+/.test(trimmed) ||
-    /^\s*```/.test(trimmed) ||
-    /^\s*\|.*\|\s*$/m.test(trimmed) ||
-    /^\s*[-:| ]+\s*$/m.test(trimmed) ||
-    trimmed.includes("<table") ||
-    trimmed.includes("</table>")
-  );
+function isMarkdownTableRow(line: string) {
+  return /^\|.*\|\s*$/.test(line) || /^[-:| ]+$/.test(line);
 }
 
 function joinMarkdownParagraphText(previous: string, current: string) {
@@ -179,7 +224,10 @@ function clampHeadingLevel(level?: number) {
 
 function cleanTranslatedText(text: string, originalText?: string) {
   let cleaned = prepareText(text).trim();
+  cleaned = cleaned.replace(/^公式识别\s*/u, "");
+  cleaned = cleaned.replace(/^Text to translate:\s*/iu, "");
   cleaned = cleaned.replace(/^标题[:：]\s*.*?文本翻译[:：]\s*/u, "");
+  cleaned = cleaned.replace(/\[(\d+)\]/g, "");
   if (originalText && /^#{1,6}\s+/.test(originalText.trim())) {
     cleaned = cleaned.replace(/^#{1,6}\s*/, "");
   }
@@ -188,6 +236,33 @@ function cleanTranslatedText(text: string, originalText?: string) {
     cleaned = cleaned.replace(new RegExp(`^${escaped}\\s*[:：-]?\\s*`, "u"), "");
   }
   return cleaned.trim();
+}
+
+function renderFormulaBlockContent(input: string) {
+  const normalized = input.replace(/\r\n/g, "\n").trim();
+  if (!normalized) {
+    return "";
+  }
+
+  const displayMatches = Array.from(
+    normalized.matchAll(/\$\$[\s\S]+?\$\$/g),
+    (match) => match[0],
+  );
+  if (displayMatches.length) {
+    return displayMatches
+      .map(
+        (formula) =>
+          `<div class="formula-block">${renderFormulaToMathML(formula.trim(), escapeHTML)}</div>`,
+      )
+      .join("\n");
+  }
+
+  const lines = normalized
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  return `<div class="formula-block">${renderFormulaToMathML(normalized, escapeHTML)}</div>`;
 }
 
 function markdownBlockToHTML(
@@ -592,6 +667,16 @@ export class HTMLRenderer {
         ${captionHTML}
         <div class="original-translated">${block.originalHtml}</div>
         <div class="translated">${sameTable ? block.originalHtml : translatedTableHTML}</div>
+        </section>`);
+        continue;
+      }
+
+      if (block.type === "formula") {
+        const formulaHTML = renderFormulaBlockContent(block.text);
+        sections.push(`
+      <section class="single-block">
+        <span class="original-translated">${formulaHTML}</span>
+        <span class="translated">${formulaHTML}</span>
       </section>`);
         continue;
       }

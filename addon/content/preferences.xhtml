@@ -1,9 +1,7 @@
 <linkset>
   <html:link rel="localization" href="__addonRef__-preferences.ftl" />
 </linkset>
-<groupbox
-  onload="Zotero.__addonInstance__.hooks.onPrefsEvent('load', { window })"
->
+<groupbox onload="Zotero.__addonInstance__.hooks.onPrefsWindowLoad(window);">
   <description style="white-space: normal; line-height: 1.6; margin: 0 0 8px 0;">
     <html:span data-l10n-id="pref-mineru-token-help-prefix"></html:span>
     <html:span data-l10n-id="pref-mineru-token-help-suffix"></html:span>

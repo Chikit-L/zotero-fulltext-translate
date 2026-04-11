@@ -33,13 +33,13 @@ export class ResultWriter {
     const tmpDir = Zotero.getTempDirectory().path;
     await Zotero.File.createDirectoryIfMissingAsync(tmpDir);
     const safeName = "Full Text Translation";
-    const path = PathUtils.join(tmpDir, `${safeName}.translated.html`);
+    const path = PathUtils.join(tmpDir, `${safeName}.html`);
     await Zotero.File.putContentsAsync(path, html, "utf-8");
 
     const attachment = await Zotero.Attachments.importFromFile({
       file: path,
       parentItemID: item.id,
-      title: "Full Text Translation",
+      title: safeName,
       contentType: "text/html",
     });
 

@@ -25,7 +25,16 @@ type PrefElement = Element & {
   localName: string;
 };
 
-export async function registerPrefsScripts(_window: Window) {
+export function registerPrefsPane() {
+  Zotero.PreferencePanes.register({
+    pluginID: config.addonID,
+    src: `chrome://${config.addonRef}/content/preferences.xhtml`,
+    label: addon.data.config.addonName,
+    image: `chrome://${config.addonRef}/content/icons/fulltexttranslate.svg`,
+  });
+}
+
+export async function onPrefsWindowLoad(_window: Window) {
   if (!addon.data.prefs) {
     addon.data.prefs = {
       window: _window,

@@ -10,6 +10,8 @@ var chromeHandle;
 function install(data, reason) {}
 
 async function startup({ id, version, resourceURI, rootURI }, reason) {
+  await Zotero.initializationPromise;
+
   if (!rootURI) {
     rootURI = resourceURI.spec;
   }
@@ -21,13 +23,6 @@ async function startup({ id, version, resourceURI, rootURI }, reason) {
   chromeHandle = aomStartup.registerChrome(manifestURI, [
     ["content", "__addonRef__", rootURI + "content/"],
   ]);
-
-  Zotero.PreferencePanes.register({
-    pluginID: "__addonID__",
-    src: rootURI + "content/preferences.xhtml",
-    label: "__addonName__",
-    image: "chrome://__addonRef__/content/icons/fulltexttranslate.svg",
-  });
 
   /**
    * Global variables for plugin code.
@@ -65,6 +60,12 @@ async function shutdown({ id, version, resourceURI, rootURI }, reason) {
   }
 
   Zotero.__addonInstance__?.hooks.onShutdown();
+
+  Cc["@mozilla.org/intl/stringbundle;1"]
+    .getService(Components.interfaces.nsIStringBundleService)
+    .flushBundles();
+
+  Cu.unload(`${rootURI}/content/scripts/__addonRef__.js`);
 
   if (chromeHandle) {
     chromeHandle.destruct();

@@ -1,5 +1,8 @@
 import { initLocale } from "./utils/locale";
-import { registerPrefsScripts } from "./modules/preferenceScript";
+import {
+  onPrefsWindowLoad,
+  registerPrefsPane,
+} from "./modules/preferenceScript";
 import { Common } from "./modules/Common";
 
 const initializedWindows = new Set<_ZoteroTypes.MainWindow>();
@@ -12,6 +15,7 @@ async function onStartup() {
     Zotero.unlockPromise,
     Zotero.uiReadyPromise,
   ]);
+  registerPrefsPane();
   Common.registerRightClickMenuItem();
 
   addon.data.initialized = true;
@@ -54,20 +58,10 @@ function onShutdown(): void {
  * @param type event type
  * @param data event data
  */
-async function onPrefsEvent(type: string, data: { [key: string]: any }) {
-  switch (type) {
-    case "load":
-      registerPrefsScripts(data.window);
-      break;
-    default:
-      return;
-  }
-}
-
 export default {
   onStartup,
   onShutdown,
   onMainWindowLoad,
   onMainWindowUnload,
-  onPrefsEvent,
+  onPrefsWindowLoad,
 };
